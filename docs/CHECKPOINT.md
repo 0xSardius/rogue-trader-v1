@@ -14,7 +14,7 @@
   SolanaClient, SolEnrich client+types rewrite. Registered `copy-trade` in registry.
 - **Safety:** mandatory rug veto (RISKY always blocked; CAUTION blocked unless allow_caution); fail-closed
   on missing due-diligence or unreliable price; consensus + hold-time filters favor accumulators not scalpers.
-- **Verified:** tsc clean · vitest 35/35 · wrangler dry-run builds (760 KiB).
+- **Verified:** tsc clean · vitest 40/40 · wrangler dry-run builds (761 KiB).
 
 ## What exists
 - `docs/rogue-trader-scope.md` — frozen scope for Phase 0 + Phase 1.
@@ -49,10 +49,16 @@
 4. Tune `strategy_params` (min_smart_money_buyers, min_hold_time_days, TP/SL, max_hold_hours) from output.
 5. Then flip `paper_trading: false` with smallest caps + funded wallet. **First fix close-all (below).**
 
+## Resolved
+- **`/api/close-all` now liquidates on-chain** (was: cleared state). `harness.liquidateAll()` runs a real
+  CLOSE per position through `strategy.execute` (Ultra token→USDC sell live, simulated fill paper), reuses
+  applyClose for PnL/records/cooldown/notify. Positions that fail to sell are KEPT and returned in `failed`
+  (HTTP 207) — never reports flat while holding. `/api/kill` halts-then-flattens the same way. Proven by
+  `test/harness.test.ts` (fake DO state + injected strategy): full-close, partial-close (207), kill auth,
+  kill flatten. **Live blocker cleared.**
+
 ## Open / watch-outs
-- **`/api/close-all` only clears state** — for LIVE capital it must liquidate on-chain first. Add a
-  strategy `closeAll(ctx)` (Ultra-sell every position) and call it from the harness before clearing.
-  BLOCKER before `paper_trading: false`.
 - **Jupiter Ultra is flagged superseded by Swap V2** — fine for paper + small size; revisit before scaling.
 - `strategy_params` thresholds — start with copy-trade.ts DEFAULTS, tune live.
+- Confirm `{output}` envelope + `accumulated_tokens` field names against LIVE SolEnrich before live caps.
 - Phase 2 (funding carry) + Phase 3 (sniper) plug into the same seam next.

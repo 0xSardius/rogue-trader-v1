@@ -211,12 +211,13 @@ export class Harness implements DurableObject {
     }
   }
 
-  private async applyClose(intent: TradeIntent, ctx: Ctx): Promise<void> {
+  /** Returns true only when the position was actually closed (live: on-chain fill confirmed). */
+  private async applyClose(intent: TradeIntent, ctx: Ctx): Promise<boolean> {
     try {
       const res = await this.strategy.execute(intent, ctx);
       if (!res.ok || !res.closedId) {
         if (!res.ok) this.logger.warn("harness", "CLOSE execute failed", { asset: intent.asset, error: res.error });
-        return;
+        return false;
       }
       const pnl = res.realizedPnl ?? 0;
       const paper = this.agentState.positions.find((p) => p.id === res.closedId)?.paperTrade ?? this.agentState.config.paper_trading;
@@ -239,12 +240,46 @@ export class Harness implements DurableObject {
       if (pnl < 0) this.agentState.cooldownUntil = this.risk.cooldownEnd(this.agentState.config);
       this.logger.trade("harness", "CLOSE executed", { asset: intent.asset, pnl });
       await this.discord.tradeClosed(intent.reason, intent.label, pnl, paper);
+      return true;
     } catch (err) {
       this.logger.error("harness", "CLOSE execute threw", {
         asset: intent.asset,
         error: err instanceof Error ? err.message : String(err),
       });
+      return false;
     }
+  }
+
+  /**
+   * Force-liquidate every open position by running a synthetic CLOSE intent for each
+   * through the normal close path — a real Ultra token→USDC sell when live, a simulated
+   * fill when paper. Reuses applyClose so PnL, trade records, cooldown, and notifications
+   * stay consistent with ordinary exits.
+   *
+   * Positions that fail to liquidate (e.g. a swap error, missing wallet) are LEFT in state
+   * and returned in `failed` — for live capital we must never report "flat" while still
+   * holding tokens on-chain. Callers decide what to do with a partial result.
+   */
+  private async liquidateAll(ctx: Ctx, reason: string): Promise<{ closed: number; failed: string[] }> {
+    const open = [...this.agentState.positions]; // snapshot: applyClose mutates the live array
+    const failed: string[] = [];
+    for (const pos of open) {
+      const ok = await this.applyClose(
+        {
+          action: "CLOSE",
+          asset: pos.asset,
+          label: pos.label,
+          side: pos.side,
+          sizeUsd: 0,
+          positionId: pos.id,
+          reason,
+          meta: pos.meta,
+        },
+        ctx,
+      );
+      if (!ok) failed.push(pos.id);
+    }
+    return { closed: open.length - failed.length, failed };
   }
 
   private async saveState(): Promise<void> {
@@ -337,25 +372,42 @@ export class Harness implements DurableObject {
             await this.runCycle();
             return Response.json({ status: "cycle complete", cycleCount: this.agentState.cycleCount });
 
-          case "/close-all":
-            this.agentState.positions = [];
+          case "/close-all": {
+            const result = await this.liquidateAll(this.buildCtx(), "close-all");
             await this.saveState();
-            this.logger.warn("harness", "Emergency close-all (state cleared)");
-            return Response.json({ status: "all positions cleared" });
+            const live = !this.agentState.config.paper_trading;
+            this.logger.warn("harness", `close-all: ${result.closed} liquidated, ${result.failed.length} failed`, {
+              live,
+              failed: result.failed,
+            });
+            const allClosed = result.failed.length === 0;
+            return Response.json(
+              {
+                status: allClosed ? "all positions liquidated" : "partial liquidation — some positions remain",
+                ...result,
+              },
+              { status: allClosed ? 200 : 207 }, // 207: caller must handle the un-liquidated remainder
+            );
+          }
 
           case "/kill": {
             const body = (await request.json().catch(() => ({}))) as { secret?: string };
             if (body.secret !== this.env.KILL_SWITCH_SECRET) {
               return Response.json({ error: "Invalid kill switch secret" }, { status: 403 });
             }
+            // Halt first: trip the switch and stop the alarm before touching positions, so no
+            // new cycle can open while we liquidate.
             this.agentState.killSwitch = true;
             this.agentState.running = false;
             await this.state.storage.deleteAlarm();
-            this.agentState.positions = [];
+            // Then flatten on-chain. Any position that fails to sell is kept + reported, never dropped.
+            const result = await this.liquidateAll(this.buildCtx(), "kill-switch");
             await this.saveState();
-            this.logger.error("harness", "KILL SWITCH ACTIVATED");
+            this.logger.error("harness", `KILL SWITCH ACTIVATED — ${result.closed} liquidated, ${result.failed.length} failed`, {
+              failed: result.failed,
+            });
             await this.discord.killSwitchActivated();
-            return Response.json({ status: "killed" });
+            return Response.json({ status: "killed", ...result });
           }
         }
       }
