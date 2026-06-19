@@ -1,6 +1,12 @@
 # Rogue Trader Checkpoint
 
-## Status: Phase 1 complete (copy-trade "Metis") — ready for paper-shadow run, then small live caps
+## Status: Phase 1 complete (copy-trade "Metis") + emergency-liquidation fix — live-ready at the safety level
+_Session checkpoint 2026-06-19 · HEAD `7fe5db4` · clean + pushed to origin/main · tsc clean · vitest 40/40._
+
+**Resume here:** next is either (a) deploy + paper-shadow run (needs Cloudflare account + secrets — operator
+step, can't be done headlessly) or (b) start **Phase 2 — funding carry** (market-neutral, plugs into the
+same seam). No code blockers remain before flipping `paper_trading: false`; remaining items are operational
+(see Open / watch-outs).
 
 ## Phase 1 — copy-trade "Metis" (DONE 2026-06-19)
 - **Verified SolEnrich contracts first** (API rule): endpoints are `POST /entrypoints/{key}/invoke`
@@ -30,7 +36,8 @@
     `src/providers/solenrich/{client,types}`, `src/providers/llm/provider.ts` (+ `parseLLMResponse`).
   - `src/index.ts` + `src/env.ts` — worker entry, `/health` + `/api/*` → DO.
   - `wrangler.toml`, `vitest.config.ts`, repo config.
-- **Verified:** `tsc --noEmit` clean · `vitest` 22/22 passing · `wrangler deploy --dry-run` builds (744 KiB).
+- **Phase 1 + close-all fix added:** copy-trade strategy, Jupiter price/ultra clients, SolEnrich rewrite,
+  harness `liquidateAll`, `test/harness.test.ts`. (Current cumulative verification totals at top of file.)
 
 ## Key decisions
 - Reuse Pythia's hardened harness as a strategy seam (extract, not rebuild). Dropped prediction-market
@@ -47,7 +54,8 @@
 2. Confirm against LIVE SolEnrich that `{output}` envelope + field names match (esp. `accumulated_tokens`).
 3. Add the `X-Internal-Key` bypass to SolEnrich itself (~10 lines) so the swarm calls it free.
 4. Tune `strategy_params` (min_smart_money_buyers, min_hold_time_days, TP/SL, max_hold_hours) from output.
-5. Then flip `paper_trading: false` with smallest caps + funded wallet. **First fix close-all (below).**
+5. Then flip `paper_trading: false` with smallest caps + funded wallet. (close-all/kill now liquidate on-chain
+   — see Resolved.) Verify `/api/close-all` and `/api/kill` against the funded wallet before sizing up.
 
 ## Resolved
 - **`/api/close-all` now liquidates on-chain** (was: cleared state). `harness.liquidateAll()` runs a real
