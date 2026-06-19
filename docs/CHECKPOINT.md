@@ -1,25 +1,42 @@
 # Rogue Trader Checkpoint
 
-## Status: Planning complete — repo scaffolded, ready for Phase 0
+## Status: Phase 0 complete (thin scaffold) — ready for Phase 1 (copy-trade "Metis")
 
 ## What exists
-- `docs/rogue-trader-scope.md` — frozen build scope for Phase 0 (thin scaffold) + Phase 1 (copy-trade agent "Metis")
-- Repo config: README, .gitignore, .env.example, package.json, tsconfig.json
-- Git initialized, remote set to github.com/0xSardius/rogue-trader-v1 (not yet pushed)
+- `docs/rogue-trader-scope.md` — frozen scope for Phase 0 + Phase 1.
+- **Phase 0 scaffold (MAHORAGA pattern, extracted from Pythia):**
+  - `src/strategy/types.ts` — the Strategy seam: `Strategy`, `Ctx`, generic `Position`, `TradeIntent`,
+    `ExecResult`, `TradeRecord`, `AgentConfig`/`DEFAULT_CONFIG`/`validateConfig`, `AgentState`.
+  - `src/strategy/echo.ts` — no-op `EchoStrategy` proving the seam. `src/strategy/registry.ts` — select by `STRATEGY`.
+  - `src/durable-objects/harness.ts` — thin DO orchestrator: cycle (manage→gather→decide→policy→execute),
+    alarm scheduling, state persistence, kill switch, dashboard API. Strategy-agnostic; never changes per-agent.
+  - `src/policy/{engine,risk}.ts` — generic OPEN gating (kill switch, cooldown, max positions, daily loss,
+    confidence) + position sizing. CLOSE intents bypass the gate (always allow exit).
+  - Ported infra: `src/lib/{logger,errors,rate-limiter,discord}`, `src/providers/solana.ts`,
+    `src/providers/solenrich/{client,types}`, `src/providers/llm/provider.ts` (+ `parseLLMResponse`).
+  - `src/index.ts` + `src/env.ts` — worker entry, `/health` + `/api/*` → DO.
+  - `wrangler.toml`, `vitest.config.ts`, repo config.
+- **Verified:** `tsc --noEmit` clean · `vitest` 22/22 passing · `wrangler deploy --dry-run` builds (744 KiB).
 
 ## Key decisions
-- Swarm on the MAHORAGA pattern, reusing Pythia's hardened harness (extract a Strategy seam, don't rebuild).
-- Sequence: scaffold → copy-trade #1 → funding carry #2 → sniper #3 → portfolio overlay #4.
-- Copy-trade before carry: single-leg + edge survives small size vs carry's two-leg + capital-hungry.
-- Small REAL capital, paper-shadow first, tight caps + live kill switch.
-- LLM is a rug/sanity *veto* for copy-trade, not a predictor. Wallet is the alpha.
-- SolEnrich called internal-free (X-Internal-Key bypass) so the swarm doesn't pay itself.
+- Reuse Pythia's hardened harness as a strategy seam (extract, not rebuild). Dropped prediction-market
+  specifics (jupiter events/orders, reddit). LLM kept as a *veto*, not a predictor.
+- Generic Position/TradeIntent so all strategies share policy/risk/treasury.
+- Used **plain vitest** (not @cloudflare/vitest-pool-workers) to avoid Pythia's borsh/workers test issues.
+- Persistence: DO storage holds AgentState incl. a capped `recentTrades` log. D1 deferred to Phase 1.
+- Each swarm agent = same Worker image, different `STRATEGY` env (one DO instance per strategy: `rt-<key>`).
 
-## Next steps (Phase 0)
-1. Copy reusable Pythia modules (harness, policy/risk, lib/, solana.ts, solenrich client, llm, d1).
-2. Extract `src/strategy/types.ts` Strategy interface; rewire runCycle() to drive the active strategy.
-3. Drop prediction-market specifics (jupiter/events, jupiter/orders, reddit); add jupiter/swap.ts stub.
-4. Green build + tests + a no-op EchoStrategy proving the seam. Commit.
+## Next steps (Phase 1 — copy-trade "Metis")
+1. **Verify SolEnrich endpoint shape** (`/entrypoints/{key}/invoke` vs REST in client.ts) against
+   `/openapi.json`; wire `smart-money-seeds`, `smart-money-flow`, `copy-trade-signals`, `rug-pull`.
+   Prefer internal-free mode (`SOLENRICH_INTERNAL_KEY`).
+2. `src/providers/jupiter/swap.ts` — Jupiter Ultra spot-swap client (USDC↔token) using `solana.ts`.
+3. `src/strategy/copy-trade.ts` — gather (watched-wallet buys) → decide (rug veto + track-record filter +
+   size) → execute (Ultra swap) → manage (mirror-exit + SL/TP + stale). Register in `registry.ts`.
+4. Paper-shadow first; then small real caps. Tune wallet-selection thresholds from live output.
 
-## Open
-- Agent name (Metis proposed). Wallet-selection thresholds. Whether to add SolEnrich bypass now.
+## Open / watch-outs
+- **`/api/close-all` currently just clears state** — for LIVE capital it must liquidate on-chain first.
+  Make the strategy expose a `closeAll(ctx)` before flipping `paper_trading: false`.
+- Wallet-selection thresholds (hold time, min win rate/PnL) — start simple, tune live.
+- Add the `X-Internal-Key` bypass to SolEnrich itself (one ~10-line change) when wiring Phase 1.

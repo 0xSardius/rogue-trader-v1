@@ -1,0 +1,23 @@
+name = "rogue-trader"
+main = "src/index.ts"
+compatibility_date = "2024-09-25"
+compatibility_flags = ["nodejs_compat"]
+
+# Each swarm agent is this same image with a different STRATEGY var.
+[vars]
+STRATEGY = "echo"
+SOLENRICH_URL = "https://api.solenrich.com"
+SOLENRICH_ENABLED = "true"
+
+[[durable_objects.bindings]]
+name = "HARNESS"
+class_name = "Harness"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Harness"]
+
+# Optional KV cache (uncomment + set id after `wrangler kv namespace create CACHE`)
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = "TODO"

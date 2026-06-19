@@ -91,9 +91,8 @@ seam; tests still pass; new repo config (package.json/tsconfig/wrangler/.gitigno
 
 ## PHASE 1 — COPY-TRADE AGENT ("Metis")
 
-> **Name:** *Metis* — Jupiter's innermost moon + Greek goddess of cunning counsel; apt for "follow the smart
-> wallets." **OPEN — user to confirm** (cf. Ananke locked for the perps bot). Naming follows Jupiter moons /
-> fate-time deities.
+> **Name:** *Metis* (LOCKED 2026-06-19) — Jupiter's innermost moon + Greek goddess of cunning counsel; apt
+> for "follow the smart wallets." Naming follows Jupiter moons / fate-time deities (cf. Ananke perps bot).
 
 **Thesis:** the **wallet is the alpha**, not the LLM. This inverts MAHORAGA's LLM-centric design — the LLM is
 a **rug/sanity veto**, never a price predictor. Cheaper, faster, and where the real edge is.
@@ -166,7 +165,6 @@ benefits. Verify exact response field names against `/openapi.json` per the glob
 - Runtime stays Cloudflare Workers + DO + D1/KV (inherited from Pythia).
 
 **Open (resolve during build, not blocking):**
-- Agent name (*Metis* proposed).
 - Exact wallet-selection thresholds (hold time, min win rate / PnL) — start simple, tune from live output.
 - Whether to add the SolEnrich `X-Internal-Key` bypass now (recommended) or pay x402 to start.
 - Exit policy default weighting (mirror-exit vs SL/TP) — start with mirror-exit primary, SL/TP as backstop.
