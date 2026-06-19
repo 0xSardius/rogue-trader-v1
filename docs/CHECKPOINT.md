@@ -1,6 +1,20 @@
 # Rogue Trader Checkpoint
 
-## Status: Phase 0 complete (thin scaffold) — ready for Phase 1 (copy-trade "Metis")
+## Status: Phase 1 complete (copy-trade "Metis") — ready for paper-shadow run, then small live caps
+
+## Phase 1 — copy-trade "Metis" (DONE 2026-06-19)
+- **Verified SolEnrich contracts first** (API rule): endpoints are `POST /entrypoints/{key}/invoke`
+  with `{input}`, response `{output: data}` (format:"json"). Rewrote the client off the old guessed
+  REST paths. Used keys: `smart-money-flow`, `copy-trade-signals`, `due-diligence`.
+- **Design refinement from the real API:** signal source is `smart-money-flow.accumulated_tokens`
+  (tokens N+ proven wallets are accumulating) — a consensus signal, cleaner than per-wallet mirroring.
+  Mirror-exit = token leaves the accumulation set. The wallet is the alpha; due-diligence is the rug VETO.
+- **Files:** `src/strategy/copy-trade.ts` (gather→decide→manage→execute), `src/providers/jupiter/price.ts`
+  (Price v3, fail-closed), `src/providers/jupiter/ultra.ts` (Ultra order→sign→execute), `signOnly()` on
+  SolanaClient, SolEnrich client+types rewrite. Registered `copy-trade` in registry.
+- **Safety:** mandatory rug veto (RISKY always blocked; CAUTION blocked unless allow_caution); fail-closed
+  on missing due-diligence or unreliable price; consensus + hold-time filters favor accumulators not scalpers.
+- **Verified:** tsc clean · vitest 35/35 · wrangler dry-run builds (760 KiB).
 
 ## What exists
 - `docs/rogue-trader-scope.md` — frozen scope for Phase 0 + Phase 1.
@@ -26,17 +40,19 @@
 - Persistence: DO storage holds AgentState incl. a capped `recentTrades` log. D1 deferred to Phase 1.
 - Each swarm agent = same Worker image, different `STRATEGY` env (one DO instance per strategy: `rt-<key>`).
 
-## Next steps (Phase 1 — copy-trade "Metis")
-1. **Verify SolEnrich endpoint shape** (`/entrypoints/{key}/invoke` vs REST in client.ts) against
-   `/openapi.json`; wire `smart-money-seeds`, `smart-money-flow`, `copy-trade-signals`, `rug-pull`.
-   Prefer internal-free mode (`SOLENRICH_INTERNAL_KEY`).
-2. `src/providers/jupiter/swap.ts` — Jupiter Ultra spot-swap client (USDC↔token) using `solana.ts`.
-3. `src/strategy/copy-trade.ts` — gather (watched-wallet buys) → decide (rug veto + track-record filter +
-   size) → execute (Ultra swap) → manage (mirror-exit + SL/TP + stale). Register in `registry.ts`.
-4. Paper-shadow first; then small real caps. Tune wallet-selection thresholds from live output.
+## Next steps (paper-shadow → live)
+1. Deploy with `STRATEGY=copy-trade`, `paper_trading: true`; set secrets (JUPITER_API_KEY,
+   SOLENRICH_INTERNAL_KEY, ANTHROPIC_API_KEY, API_TOKEN, KILL_SWITCH_SECRET). Run `POST /api/run-once`
+   then `/api/start`; watch `/api/candidates`, `/api/positions`, `/api/history`, `/api/logs`.
+2. Confirm against LIVE SolEnrich that `{output}` envelope + field names match (esp. `accumulated_tokens`).
+3. Add the `X-Internal-Key` bypass to SolEnrich itself (~10 lines) so the swarm calls it free.
+4. Tune `strategy_params` (min_smart_money_buyers, min_hold_time_days, TP/SL, max_hold_hours) from output.
+5. Then flip `paper_trading: false` with smallest caps + funded wallet. **First fix close-all (below).**
 
 ## Open / watch-outs
-- **`/api/close-all` currently just clears state** — for LIVE capital it must liquidate on-chain first.
-  Make the strategy expose a `closeAll(ctx)` before flipping `paper_trading: false`.
-- Wallet-selection thresholds (hold time, min win rate/PnL) — start simple, tune live.
-- Add the `X-Internal-Key` bypass to SolEnrich itself (one ~10-line change) when wiring Phase 1.
+- **`/api/close-all` only clears state** — for LIVE capital it must liquidate on-chain first. Add a
+  strategy `closeAll(ctx)` (Ultra-sell every position) and call it from the harness before clearing.
+  BLOCKER before `paper_trading: false`.
+- **Jupiter Ultra is flagged superseded by Swap V2** — fine for paper + small size; revisit before scaling.
+- `strategy_params` thresholds — start with copy-trade.ts DEFAULTS, tune live.
+- Phase 2 (funding carry) + Phase 3 (sniper) plug into the same seam next.

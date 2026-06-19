@@ -35,6 +35,24 @@ export class SolanaClient {
     return this.keypair.publicKey.toBase58();
   }
 
+  /**
+   * Sign a base64 VersionedTransaction and return the signed tx as base64,
+   * WITHOUT submitting. Used by flows that submit themselves (e.g. Jupiter
+   * Ultra /execute). Returns null on failure.
+   */
+  signOnly(transactionBase64: string): string | null {
+    try {
+      const tx = VersionedTransaction.deserialize(Buffer.from(transactionBase64, "base64"));
+      tx.sign([this.keypair]);
+      return Buffer.from(tx.serialize()).toString("base64");
+    } catch (err) {
+      this.logger.error("solana", "signOnly failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
+  }
+
   /** Sign a base64-encoded VersionedTransaction (e.g. from Jupiter), submit, and confirm. */
   async signAndSend(transactionBase64: string): Promise<SignAndSendResult> {
     try {

@@ -1,14 +1,15 @@
 import { Strategy } from "./types";
 import { EchoStrategy } from "./echo";
+import { CopyTradeStrategy } from "./copy-trade";
 
 /**
  * Select the active strategy by key (from the STRATEGY env var).
  * Each agent in the swarm is the same Worker image with a different STRATEGY.
- *
- * Phase 1 will register: case "copy-trade": return new CopyTradeStrategy();
  */
 export function createStrategy(key: string | undefined): Strategy {
   switch ((key ?? "echo").toLowerCase()) {
+    case "copy-trade":
+      return new CopyTradeStrategy();
     case "echo":
       return new EchoStrategy();
     default:
@@ -17,4 +18,4 @@ export function createStrategy(key: string | undefined): Strategy {
   }
 }
 
-export const KNOWN_STRATEGIES = ["echo"] as const;
+export const KNOWN_STRATEGIES = ["echo", "copy-trade"] as const;
