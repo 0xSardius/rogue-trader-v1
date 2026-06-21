@@ -1,12 +1,28 @@
 # Rogue Trader Checkpoint
 
-## Status: Phase 1 complete (copy-trade "Metis") + emergency-liquidation fix — live-ready at the safety level
-_Session checkpoint 2026-06-19 · HEAD `7fe5db4` · clean + pushed to origin/main · tsc clean · vitest 40/40._
+## Status: Phase 2 (JLP delta-neutral "Amalthea") built paper-complete; live perp writes devnet-gated
+_Session checkpoint 2026-06-21 · tsc clean · vitest 49/49 · wrangler dry-run builds (1.55 MB / 274 KiB gzip)._
 
-**Resume here:** next is either (a) deploy + paper-shadow run (needs Cloudflare account + secrets — operator
-step, can't be done headlessly) or (b) start **Phase 2 — funding carry** (market-neutral, plugs into the
-same seam). No code blockers remain before flipping `paper_trading: false`; remaining items are operational
-(see Open / watch-outs).
+**Resume here:** Amalthea runs the full JLP delta-neutral logic in paper mode against LIVE on-chain data.
+Next: (a) **devnet-validate the perp write path** (PDA seeds for position/positionRequest + the
+createIncreasePositionMarketRequest build — see perps-write.ts) to unlock live; (b) deploy + paper-shadow
+Metis and/or Amalthea (operator step — needs Cloudflare account + keys); or (c) Phase 3 (memecoin sniper).
+
+## Phase 2 — JLP delta-neutral "Amalthea" (paper-complete 2026-06-21)
+- **Why not classic funding carry:** Jupiter Perps is a BORROW-fee model (both sides pay), so naked carry
+  there is negative. Instead: hold JLP (fee yield), short SOL/BTC/ETH on Jupiter Perps to hedge the basket
+  → keep the yield, delta-neutral. Net carry = est. JLP APR − weighted short borrow (read live) − costs.
+- **Verified on-chain (from SolEnrich, not memory):** perps program `PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu`,
+  Doves `DoVEsk76QybCEHQGzkvYPWLQu9gzNoZZZt3TPiL597e`, JLP pool `5BUwFW4nRbftYTDMbgxykoFWqWHPzahFSNAaaaJtVKsq`,
+  JLP mint `27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4`, custodies SOL/BTC/ETH/USDC/USDT.
+- **Files:** ported verified IDLs (`src/providers/jupiter/idl/`), `perps.ts` (read: markets/borrow/mark +
+  JLP composition + positions, via @coral-xyz/anchor 0.29), `perps-write.ts` (open/close short — DEVNET-GATED,
+  throws until validated; documents the verified ABI), `src/strategy/jlp-delta-neutral.ts` (Amalthea),
+  registered `jlp-delta-neutral`. Added deps `@coral-xyz/anchor@0.29`, `@solana/spl-token`.
+- **Paper-complete:** gather (net-carry gate) → decide → execute (composite JLP+shorts position) → manage
+  (carry accrual, carry-collapse exit, delta-drift exit). Live OPEN refuses to half-open (shorts first; the
+  gated writer throws → ok:false). `expected_jlp_apr_pct` is an operator estimate (monitor jup.ag); borrow is live.
+- **Verified:** tsc clean · vitest 49/49 (9 Amalthea tests) · wrangler dry-run builds (Anchor bundles fine).
 
 ## Phase 1 — copy-trade "Metis" (DONE 2026-06-19)
 - **Verified SolEnrich contracts first** (API rule): endpoints are `POST /entrypoints/{key}/invoke`
@@ -66,7 +82,13 @@ same seam). No code blockers remain before flipping `paper_trading: false`; rema
   kill flatten. **Live blocker cleared.**
 
 ## Open / watch-outs
-- **Jupiter Ultra is flagged superseded by Swap V2** — fine for paper + small size; revisit before scaling.
-- `strategy_params` thresholds — start with copy-trade.ts DEFAULTS, tune live.
-- Confirm `{output}` envelope + `accumulated_tokens` field names against LIVE SolEnrich before live caps.
-- Phase 2 (funding carry) + Phase 3 (sniper) plug into the same seam next.
+- **Amalthea live perp writes are DEVNET-GATED** — perps-write.ts throws until the PDA seeds
+  (position/positionRequest) + createIncreasePositionMarketRequest build are validated on devnet. Required
+  before `paper_trading: false` for jlp-delta-neutral.
+- **JLP composition is approximated** — weights = owned×price/AUM, ignoring trader-PnL liabilities. Refine
+  the hedge ratio (true JLP delta) before live capital.
+- `expected_jlp_apr_pct` is an operator estimate, not measured — set/monitor from jup.ag perps-earn.
+- Anchor + IDL adds ~800 KiB to the bundle (274 KiB gzip, well under limits); confirm Anchor Program runs
+  in the Workers runtime on first real deploy (SolEnrich runs it on Bun/Railway, not Workers).
+- `strategy_params` thresholds — start with each strategy's DEFAULTS, tune live.
+- Phase 3 (memecoin sniper) + portfolio overlay plug into the same seam next.

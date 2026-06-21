@@ -30,8 +30,9 @@ export interface SwapResult {
  * Jupiter Ultra Swap client. Flow: GET /ultra/v1/order -> sign -> POST /ultra/v1/execute
  * (Ultra lands the transaction itself; we only sign). x-api-key required.
  *
- * NOTE: Jupiter docs flag Ultra as superseded by Swap V2. Ultra still works and is the
- * simplest order->execute path; revisit a Swap V2 migration before scaling notional.
+ * Ultra is Jupiter's current recommended swap path (Iris routing engine, best-route +
+ * gasless RTSE) — not deprecated. Signed orders have a ~2 min TTL. Slippage failures surface
+ * as execute code -1001 / on-chain 6001; treat as retryable by re-quoting.
  */
 export class JupiterUltraClient {
   private readonly baseUrl = "https://api.jup.ag/ultra/v1";

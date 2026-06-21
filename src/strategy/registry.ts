@@ -1,6 +1,7 @@
 import { Strategy } from "./types";
 import { EchoStrategy } from "./echo";
 import { CopyTradeStrategy } from "./copy-trade";
+import { JlpDeltaNeutralStrategy } from "./jlp-delta-neutral";
 
 /**
  * Select the active strategy by key (from the STRATEGY env var).
@@ -10,6 +11,8 @@ export function createStrategy(key: string | undefined): Strategy {
   switch ((key ?? "echo").toLowerCase()) {
     case "copy-trade":
       return new CopyTradeStrategy();
+    case "jlp-delta-neutral":
+      return new JlpDeltaNeutralStrategy();
     case "echo":
       return new EchoStrategy();
     default:
@@ -18,4 +21,4 @@ export function createStrategy(key: string | undefined): Strategy {
   }
 }
 
-export const KNOWN_STRATEGIES = ["echo", "copy-trade"] as const;
+export const KNOWN_STRATEGIES = ["echo", "copy-trade", "jlp-delta-neutral"] as const;
