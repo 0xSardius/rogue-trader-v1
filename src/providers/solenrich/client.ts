@@ -5,6 +5,10 @@ import {
   SmartMoneyFlowResult,
   CopyTradeEnrichment,
   DueDiligenceEnrichment,
+  TrendingSignalsInput,
+  TrendingSignalsResult,
+  NewTokensInput,
+  TokenDiscoveryResult,
 } from "./types";
 import { Logger } from "../../lib/logger";
 import { RateLimiter } from "../../lib/rate-limiter";
@@ -89,6 +93,16 @@ export class SolEnrichClient {
   /** Token research with a SAFE/CAUTION/RISKY recommendation — the rug veto. */
   dueDiligence(mint: string): Promise<DueDiligenceEnrichment | null> {
     return this.invoke<DueDiligenceEnrichment>("due-diligence", { mint });
+  }
+
+  /** Risk-scored, ranked list of trending tokens — the sniper's momentum source. */
+  trendingSignals(input: TrendingSignalsInput = {}): Promise<TrendingSignalsResult | null> {
+    return this.invoke<TrendingSignalsResult>("trending-signals", { ...input });
+  }
+
+  /** Recently launched tokens with risk scoring (safest first) — fresh-launch source. */
+  newTokens(input: NewTokensInput = {}): Promise<TokenDiscoveryResult | null> {
+    return this.invoke<TokenDiscoveryResult>("new-tokens", { ...input });
   }
 
   async healthCheck(): Promise<boolean> {

@@ -89,3 +89,71 @@ export interface DueDiligenceEnrichment {
   recommendation: DueDiligenceRecommendation;
   last_updated: string;
 }
+
+// ─── trending-signals (sniper discovery) ────────────────────────────
+
+export interface TrendingSignalsInput {
+  min_liquidity_usd?: number; // default 10_000
+  max_risk_score?: number; // 0..1, default 0.7
+  limit?: number; // 1..20, default 10
+  include_whale_watch?: boolean; // default true
+}
+
+export interface TrendingTokenSignal {
+  mint: string;
+  symbol: string;
+  name: string;
+  price_usd: number;
+  market_cap: number;
+  liquidity: number;
+  risk_score: number; // 0..1 (higher = riskier)
+  risk_level: string;
+  risk_flags: string[];
+  verified: boolean;
+  holder_count: number;
+  concentration_hhi: number | null;
+  whale_net_flow?: "accumulating" | "distributing" | "neutral";
+  whale_count?: number;
+  total_whale_volume_usd?: number;
+  composite_signal: number; // 0..1 ranking score
+  reasoning: string[];
+  recommendation: DueDiligenceRecommendation;
+}
+
+export interface TrendingSignalsResult {
+  tokens: TrendingTokenSignal[];
+  total_scanned: number;
+  overall_sentiment: "accumulation" | "distribution" | "mixed";
+  last_updated: string;
+}
+
+// ─── new-tokens (fresh-launch discovery) ────────────────────────────
+
+export interface NewTokensInput {
+  min_liquidity_usd?: number; // default 1_000
+  max_risk_score?: number; // 0..1, default 0.8
+  limit?: number; // 1..20, default 10
+}
+
+export interface DiscoveredToken {
+  mint: string;
+  symbol: string;
+  name: string;
+  price_usd: number;
+  market_cap: number;
+  liquidity: number;
+  risk_score: number;
+  risk_level: string;
+  risk_flags: string[];
+  recommendation: DueDiligenceRecommendation;
+  verified: boolean;
+  holder_count: number;
+  concentration_hhi: number | null;
+}
+
+export interface TokenDiscoveryResult {
+  tokens: DiscoveredToken[];
+  total_scanned: number;
+  total_passed: number;
+  last_updated: string;
+}

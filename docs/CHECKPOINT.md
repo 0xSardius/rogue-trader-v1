@@ -1,12 +1,24 @@
 # Rogue Trader Checkpoint
 
-## Status: Phase 2 (JLP delta-neutral "Amalthea") built paper-complete; live perp writes devnet-gated
-_Session checkpoint 2026-06-21 · tsc clean · vitest 49/49 · wrangler dry-run builds (1.55 MB / 274 KiB gzip)._
+## Status: Phases 0–3 strategies built (Metis, Amalthea, Io) — all paper-complete; not yet deployed
+_Session checkpoint 2026-06-22 · tsc clean · vitest 59/59 · wrangler dry-run builds (1.56 MB / 276 KiB gzip)._
 
-**Resume here:** Amalthea runs the full JLP delta-neutral logic in paper mode against LIVE on-chain data.
-Next: (a) **devnet-validate the perp write path** (PDA seeds for position/positionRequest + the
-createIncreasePositionMarketRequest build — see perps-write.ts) to unlock live; (b) deploy + paper-shadow
-Metis and/or Amalthea (operator step — needs Cloudflare account + keys); or (c) Phase 3 (memecoin sniper).
+**Resume here:** all three strategy agents are paper-complete on the shared seam. Nothing has run live yet.
+Next: (a) **deploy + paper-shadow** an agent (operator step — needs Cloudflare account + keys) to validate
+the loop end-to-end against live data; (b) **Phase 4 — portfolio overlay** (treasury, cross-agent exposure
+caps, kill-all); (c) **devnet-validate Amalthea's perp write path** to unlock its live trading.
+
+## Phase 3 — memecoin sniper "Io" (paper-complete 2026-06-22)
+- Convex/lottery leg: small fixed tickets on fresh/trending tokens, hard rug-filtered, aggressive TP +
+  trailing + fast time-stop. Edge = speed + filtering, not prediction.
+- **Verified SolEnrich contracts:** `trending-signals` + `new-tokens` return mint/price/liquidity/risk_score/
+  recommendation/holder_count (+ composite_signal & whale flow for trending) — discovery AND first veto in
+  one call. Added typed `trendingSignals()`/`newTokens()` to the client.
+- **Files:** `src/strategy/sniper.ts` (gather→filter→decide→execute→manage), registered `sniper`. Reuses
+  Jupiter price + Ultra (same as Metis); optional second due-diligence veto; SAFE-only by default.
+- **Note:** sniper agents should run with a LOW `min_confidence` (~0.4) — fresh tokens are lower-conviction
+  than smart-money consensus. Position sizing is the lottery ticket; fund from realized PnL of 1 & 2.
+- **Verified:** tsc clean · vitest 59/59 (10 Io tests) · wrangler dry-run builds (276 KiB gzip).
 
 ## Phase 2 — JLP delta-neutral "Amalthea" (paper-complete 2026-06-21)
 - **Why not classic funding carry:** Jupiter Perps is a BORROW-fee model (both sides pay), so naked carry
