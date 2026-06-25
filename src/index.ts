@@ -42,6 +42,7 @@ export default {
         "",
         "Endpoints:",
         "  GET  /health         — Health check (no auth)",
+        "  GET  /api/preflight  — Readiness gate (run before going live)",
         "  GET  /api/status     — Agent status",
         "  GET  /api/positions  — Open positions",
         "  GET  /api/candidates — Last gathered candidates",

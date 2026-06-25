@@ -1,12 +1,22 @@
 # Rogue Trader Checkpoint
 
-## Status: Phases 0–3 strategies built (Metis, Amalthea, Io) — all paper-complete; not yet deployed
-_Session checkpoint 2026-06-22 · tsc clean · vitest 59/59 · wrangler dry-run builds (1.56 MB / 276 KiB gzip)._
+## Status: Phases 0–3 strategies + deploy-readiness done — turnkey to first income (operator deploy pending)
+_Session checkpoint 2026-06-25 · tsc clean · vitest 59/59 · wrangler dry-run builds (1.57 MB / 277 KiB gzip)._
 
-**Resume here:** all three strategy agents are paper-complete on the shared seam. Nothing has run live yet.
-Next: (a) **deploy + paper-shadow** an agent (operator step — needs Cloudflare account + keys) to validate
-the loop end-to-end against live data; (b) **Phase 4 — portfolio overlay** (treasury, cross-agent exposure
-caps, kill-all); (c) **devnet-validate Amalthea's perp write path** to unlock its live trading.
+**Resume here:** the path to autonomous income is now turnkey — the only thing left before income is the
+OPERATOR DEPLOY (your Cloudflare Paid account + secrets + funded wallet; can't be done headlessly).
+Follow `docs/DEPLOY.md` (start with Metis): deploy paper → `GET /api/preflight` → validate SolEnrich
+envelope → paper-shadow 24–48h → tiny live caps → `start`. Then: (a) repeat for Io; (b) **Phase 4 —
+portfolio overlay** (shared treasury + cross-agent caps + kill-all) for running the full swarm on shared
+capital; (c) devnet-validate Amalthea's perp writes.
+
+## Deploy readiness (2026-06-25)
+- **`GET /api/preflight`** — readiness gate: checks ops secrets, SolEnrich reachability, Jupiter price feed,
+  and (live) wallet present + SOL balance + strategy-specific gates (e.g. Amalthea's devnet_validated).
+  `ready` reflects only the REQUIRED checks for the current mode. Run before `/start` and before going live.
+- **`docs/DEPLOY.md`** — turnkey runbook: per-agent `wrangler deploy --name rt-<x> --var STRATEGY:<key>`,
+  secrets, preflight, a live SolEnrich-envelope validation curl, paper-shadow steps, go-live with tiny caps,
+  emergency-control verification, and multi-agent deploy. Each agent = own Worker name, own DO state + wallet.
 
 ## Phase 3 — memecoin sniper "Io" (paper-complete 2026-06-22)
 - Convex/lottery leg: small fixed tickets on fresh/trending tokens, hard rug-filtered, aggressive TP +

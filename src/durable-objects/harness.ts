@@ -6,7 +6,8 @@ import { LLMProvider } from "../providers/llm/provider";
 import { SolanaClient } from "../providers/solana";
 import { PolicyEngine } from "../policy/engine";
 import { RiskManager } from "../policy/risk";
-import { createStrategy } from "../strategy/registry";
+import { createStrategy, KNOWN_STRATEGIES } from "../strategy/registry";
+import { JupiterPriceClient } from "../providers/jupiter/price";
 import {
   AgentConfig,
   AgentState,
@@ -282,6 +283,69 @@ export class Harness implements DurableObject {
     return { closed: open.length - failed.length, failed };
   }
 
+  /**
+   * Readiness gate before going live: confirms secrets, the brain (SolEnrich), price
+   * feed, and — when live — the funded wallet + any strategy-specific gates. `ready`
+   * reflects only the REQUIRED checks for the current mode. Run before POST /start,
+   * and especially before flipping paper_trading: false.
+   */
+  private async buildPreflight(): Promise<{
+    ready: boolean;
+    mode: string;
+    strategy: string;
+    checks: Array<{ name: string; ok: boolean; detail: string; required: boolean }>;
+  }> {
+    const cfg = this.agentState.config;
+    const live = !cfg.paper_trading;
+    const strat = this.strategy.key;
+    const needsBrain = strat !== "echo";
+    const checks: Array<{ name: string; ok: boolean; detail: string; required: boolean }> = [];
+    const SOL = "So11111111111111111111111111111111111111112";
+
+    checks.push({ name: "API_TOKEN", ok: !!this.env.API_TOKEN, detail: this.env.API_TOKEN ? "set" : "missing", required: true });
+    checks.push({ name: "KILL_SWITCH_SECRET", ok: !!this.env.KILL_SWITCH_SECRET, detail: this.env.KILL_SWITCH_SECRET ? "set" : "missing", required: true });
+
+    const known = (KNOWN_STRATEGIES as readonly string[]).includes(strat);
+    checks.push({ name: "strategy", ok: known, detail: known ? strat : `unknown '${this.env.STRATEGY}' → running echo`, required: true });
+
+    try {
+      const seOk = await this.solenrich.healthCheck();
+      checks.push({ name: "solenrich", ok: seOk || !needsBrain, detail: seOk ? "reachable" : "unreachable", required: needsBrain });
+    } catch {
+      checks.push({ name: "solenrich", ok: !needsBrain, detail: "error", required: needsBrain });
+    }
+
+    try {
+      const p = await new JupiterPriceClient(this.logger, this.env.JUPITER_API_KEY).getPrice(SOL);
+      checks.push({ name: "jupiter_price", ok: !!p, detail: p ? `SOL $${p.usdPrice.toFixed(2)}` : "no price", required: needsBrain });
+    } catch {
+      checks.push({ name: "jupiter_price", ok: !needsBrain, detail: "error", required: needsBrain });
+    }
+
+    if (live) {
+      checks.push({ name: "WALLET_PRIVATE_KEY", ok: !!this.env.WALLET_PRIVATE_KEY, detail: this.env.WALLET_PRIVATE_KEY ? "set" : "missing", required: true });
+      checks.push({ name: "SOLANA_RPC_URL", ok: !!this.env.SOLANA_RPC_URL, detail: this.env.SOLANA_RPC_URL ? "set" : "missing", required: true });
+      checks.push({ name: "JUPITER_API_KEY", ok: !!this.env.JUPITER_API_KEY, detail: this.env.JUPITER_API_KEY ? "set" : "missing (rate-limited)", required: false });
+      if (this.solana) {
+        try {
+          const sol = await this.solana.getBalanceSol();
+          checks.push({ name: "wallet_sol_balance", ok: sol > 0.01, detail: `${sol.toFixed(4)} SOL`, required: true });
+        } catch {
+          checks.push({ name: "wallet_sol_balance", ok: false, detail: "RPC error", required: true });
+        }
+      } else {
+        checks.push({ name: "wallet", ok: false, detail: "not initialized (missing key/rpc)", required: true });
+      }
+      if (strat === "jlp-delta-neutral") {
+        const dv = (cfg.strategy_params as Record<string, unknown>)?.devnet_validated === true;
+        checks.push({ name: "perp_write_validated", ok: dv, detail: dv ? "set" : "GATED — live perp writes disabled until devnet-validated", required: true });
+      }
+    }
+
+    const ready = checks.filter((c) => c.required).every((c) => c.ok);
+    return { ready, mode: live ? "LIVE" : "paper", strategy: strat, checks };
+  }
+
   private async saveState(): Promise<void> {
     await this.state.storage.put("agentState", this.agentState);
   }
@@ -336,6 +400,8 @@ export class Harness implements DurableObject {
             return Response.json(this.logger.getEntries(100));
           case "/config":
             return Response.json(this.agentState.config);
+          case "/preflight":
+            return Response.json(await this.buildPreflight());
         }
       }
 
