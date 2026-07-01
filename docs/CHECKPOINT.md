@@ -1,14 +1,26 @@
 # Rogue Trader Checkpoint
 
-## Status: Phases 0–3 strategies + deploy-readiness done — turnkey to first income (operator deploy pending)
-_Session checkpoint 2026-06-25 · tsc clean · vitest 59/59 · wrangler dry-run builds (1.57 MB / 277 KiB gzip)._
+## Status: MID-DEPLOY of Metis to Cloudflare (paper) — paused at Step 1 (wrangler login)
+_Checkpoint 2026-07-01 · code unchanged since `aaa3377` · tsc clean · vitest 59/59 · builds 277 KiB gzip._
 
-**Resume here:** the path to autonomous income is now turnkey — the only thing left before income is the
-OPERATOR DEPLOY (your Cloudflare Paid account + secrets + funded wallet; can't be done headlessly).
-Follow `docs/DEPLOY.md` (start with Metis): deploy paper → `GET /api/preflight` → validate SolEnrich
-envelope → paper-shadow 24–48h → tiny live caps → `start`. Then: (a) repeat for Io; (b) **Phase 4 —
-portfolio overlay** (shared treasury + cross-agent caps + kill-all) for running the full swarm on shared
-capital; (c) devnet-validate Amalthea's perp writes.
+**RESUME HERE — deploy walkthrough (following `docs/DEPLOY.md`), currently at Step 1:**
+1. ⏳ **`npx wrangler login`** — NOT done yet (`wrangler whoami` = not authenticated). User runs this in
+   their own terminal; then I confirm with `whoami` and drive the deploy from their local auth.
+2. Then I run: `wrangler deploy --name rt-metis --var STRATEGY:copy-trade` (paper by default).
+3. User sets secrets privately (own terminal — values must NOT enter chat): `API_TOKEN`,
+   `KILL_SWITCH_SECRET` (generate via `openssl rand -hex 32`), `SOLENRICH_INTERNAL_KEY`, `JUPITER_API_KEY`
+   (+ live-only later: `SOLANA_RPC_URL`, `WALLET_PRIVATE_KEY`; optional `ANTHROPIC_API_KEY`, `DISCORD_WEBHOOK_URL`).
+   All scoped `--name rt-metis`.
+4. `GET /api/preflight` (user curls, pastes non-secret JSON) → must be `ready:true`.
+5. Validate SolEnrich `{output}` envelope live (curl in DEPLOY.md §4).
+6. Paper-shadow 24–48h → tune → tiny live caps → `start`.
+- **Railway side (parallel, user's turf):** add the `X-Internal-Key` bypass to SolEnrich + set
+  `INTERNAL_API_KEY` env, so the swarm calls SolEnrich free (else 402 → no candidates → agent idles).
+- **Cost note:** DO uses SQLite backend (free-plan eligible); if deploy demands paid, that's the only ~$5/mo item.
+
+**Next projects after Metis is live:** (a) repeat deploy for Io; (b) **Phase 4 — portfolio overlay**;
+(c) devnet-validate Amalthea perp writes; (d) **NEW: Solana perps arb bot** — separate Railway project,
+funding/basis capture, suite sibling / "Ananke v2" (see memory `perps-arb-bot-decision`). Build AFTER Metis deploys.
 
 ## Deploy readiness (2026-06-25)
 - **`GET /api/preflight`** — readiness gate: checks ops secrets, SolEnrich reachability, Jupiter price feed,
